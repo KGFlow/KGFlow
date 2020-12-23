@@ -9,7 +9,7 @@ from KGFlow.dataset.wn18 import WN18Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 train_kg, test_kg, valid_kg, entity_indexer, relation_indexer = WN18Dataset().load_data()
 
@@ -40,9 +40,11 @@ for epoch in range(10000):
         else:
             batch_source = batch_t
             batch_target = batch_h
-        batch_neg_target = entity_negative_sampling(batch_source, batch_r, train_kg, target_entity_type, filtered=True)
 
         with tf.GradientTape() as tape:
+            batch_neg_target = entity_negative_sampling(batch_source, batch_r, train_kg, target_entity_type,
+                                                        filtered=True)
+
             embedded_neg_target = model.embed_norm_entities(batch_neg_target)
             embedded_target = model.embed_norm_entities(batch_target)
             translated = model([batch_source, batch_r], target_entity_type)
@@ -57,7 +59,7 @@ for epoch in range(10000):
         grads = tape.gradient(loss, vars)
         optimizer.apply_gradients(zip(grads, vars))
 
-        if step % 100 == 0:
+        if step % 200 == 0:
             print("epoch = {}\tstep = {}\tloss = {}".format(epoch, step, loss))
 
     if epoch % 10 == 0:

@@ -15,28 +15,6 @@ class TransE(keras.Model):
             tf.random.uniform((n_relation, embedding_size), -6 / np.sqrt(embedding_size), 6 / np.sqrt(embedding_size))
         )
 
-    def call(self, inputs, target_entity_type="tail", training=None, mask=None):
-        """
-
-        :param inputs: [source_entities, relations]
-        :param target_entity_type: "head" | "tail"
-        :param training:
-        :param mask:
-        :return:
-        """
-
-        source, r = np.array(inputs)
-
-        embedded_s = self.embed_norm_entities(source)
-        embedded_r = self.embed_norm_relations(r)
-
-        if target_entity_type == "tail":
-            translated = embedded_s + embedded_r
-        else:
-            translated = embedded_s - embedded_r
-
-        return translated
-
     def embed_norm(self, embeddings, indices):
 
         # if embedding table is smaller, normalizing first is more efficient
@@ -50,3 +28,26 @@ class TransE(keras.Model):
 
     def embed_norm_relations(self, relations):
         return self.embed_norm(self.relation_embeddings, relations)
+
+    def call(self, inputs, target_entity_type="tail", training=None, mask=None):
+        """
+
+        :param inputs: [source_entities, relations]
+        :param target_entity_type: "head" | "tail"
+        :param training:
+        :param mask:
+        :return:
+        """
+
+        source, r = inputs
+
+        embedded_s = self.embed_norm_entities(source)
+        embedded_r = self.embed_norm_relations(r)
+
+        if target_entity_type == "tail":
+            translated = embedded_s + embedded_r
+        else:
+            translated = embedded_s - embedded_r
+
+        return translated
+
