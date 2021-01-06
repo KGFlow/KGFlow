@@ -42,8 +42,8 @@ class KBGATModel(keras.Model):
 
         h_index, r_index, t_index = inputs[0], inputs[1], inputs[2]
 
-        self.entity_embeddings = self.dropout(self.entity_embeddings, training=training)
-        entity_feature_list, relation_features = self.gat0([(h_index, r_index, t_index), self.entity_embeddings,
+        entity_embeddings = self.dropout(self.entity_embeddings, training=training)
+        entity_feature_list, relation_features = self.gat0([(h_index, r_index, t_index), entity_embeddings,
                                                        self.relation_embeddings], training=training)
 
         entity_features = tf.concat(entity_feature_list, axis=-1)
@@ -52,7 +52,7 @@ class KBGATModel(keras.Model):
         entity_feature_list, relation_features = self.gat1([(h_index, r_index, t_index), entity_features, relation_features],
                                                        training=training)
         entity_features = tf.add_n(entity_feature_list)
-        entity_features += self.dense(self.entity_embeddings)
+        entity_features += self.dense(entity_embeddings)
 
         return entity_features, relation_features
 
@@ -60,9 +60,9 @@ class KBGATModel(keras.Model):
 model = KBGATModel()
 
 
-# @tf.function
-def forward(kg, training=False):
-    return model(inputs=kg.graph_indices, training=training)
+@tf.function(experimental_relax_shapes=True)
+def forward(batch_indices, training=False):
+    return model(inputs=batch_indices, training=training)
 
 
 class EntityAndNeighborSampler:
@@ -106,7 +106,7 @@ class EntityAndNeighborSampler:
 #     return graph_indices
 
 
-@tf.function
+@tf.function(experimental_relax_shapes=True)
 def compute_loss(entity_features, relation_features, source, relation, target, neg_target):
     s = tf.gather(entity_features, source, axis=0)
     t = tf.gather(entity_features, target, axis=0)
@@ -143,7 +143,7 @@ for step in range(10000):
 
     with tf.GradientTape() as tape:
 
-        entity_features, relation_features = forward(train_kg, training=True)
+        entity_features, relation_features = forward([batch_h, batch_r, batch_t], training=True)
 
         loss = compute_loss(entity_features, relation_features, batch_source, batch_r, batch_target, batch_neg_target)
 
