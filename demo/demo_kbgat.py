@@ -106,8 +106,6 @@ class EntityAndNeighborSampler:
 #     return graph_indices
 
 
-
-
 @tf.function
 def compute_loss(entity_features, relation_features, source, relation, target, neg_target):
     s = tf.gather(entity_features, source, axis=0)
