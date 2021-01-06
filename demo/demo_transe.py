@@ -1,5 +1,7 @@
 # coding=utf-8
+import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
@@ -7,11 +9,9 @@ import KGFlow as kgf
 from KGFlow.model.transe import TransE
 from KGFlow.dataset.wn18 import WN18Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
-import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-train_kg, test_kg, valid_kg, entity_indexer, relation_indexer = WN18Dataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
 
 margin = 2
 embedding_size = 20

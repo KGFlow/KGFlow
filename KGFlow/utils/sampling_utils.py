@@ -16,9 +16,9 @@ def entity_negative_sampling(source_entities, relations, kg, target_entity_type=
         return np.random.choice(kg.num_entities, len(source_entities), replace=False)
 
     if target_entity_type == "tail":
-        source_relation_target_dict = kg.head_relation_tail_dict
+        source_relation_target_dict = kg.hrt_dict
     else:
-        source_relation_target_dict = kg.tail_relation_head_dict
+        source_relation_target_dict = kg.trh_dict
 
     neg_entities = []
     for source, relation in zip(source_entities, relations):
