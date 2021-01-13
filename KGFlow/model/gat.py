@@ -19,6 +19,7 @@ class GAT(keras.Model):
         self.att_activation = att_activation if att_activation else lambda x: x
 
         self.kernel = tf.keras.layers.Dense(units=self.units, use_bias=False)
+        self.res_kernel = tf.keras.layers.Dense(units=self.units, use_bias=False)
         self.dropout = tf.keras.layers.Dropout(drop_rate)
         self.att_kernel = tf.keras.layers.Dense(units=1, activation=self.att_activation)
 
@@ -38,9 +39,9 @@ class GAT(keras.Model):
         (h_index, r_index, t_index), entity_embeddings, relation_embeddings = inputs
         num_entities = tf.shape(entity_embeddings)[0]
 
-        h = tf.nn.embedding_lookup(entity_embeddings, h_index)
-        r = tf.nn.embedding_lookup(relation_embeddings, r_index)
-        t = tf.nn.embedding_lookup(entity_embeddings, t_index)
+        h = tf.gather(entity_embeddings, h_index, axis=0)
+        r = tf.gather(relation_embeddings, r_index, axis=0)
+        t = tf.gather(entity_embeddings, t_index, axis=0)
         features = tf.concat([h, r, t], axis=-1)
         features = self.kernel(features)
 
@@ -55,6 +56,7 @@ class GAT(keras.Model):
         if self.use_bias:
             features += self.bias
         features = self.activation(features)
+        features += self.res_kernel(entity_embeddings)
 
         return features
 
@@ -65,8 +67,8 @@ class KBGAT(keras.Model):
     """
 
     def __init__(self, units, relation_units=None, num_heads=1, activation=tf.nn.relu,
-                 att_activation=tf.nn.leaky_relu,
-                 relation_activation=tf.nn.relu, drop_rate=0.0, use_bias=True, *args, **kwargs):
+                 att_activation=tf.nn.leaky_relu, relation_activation=tf.nn.relu,
+                 drop_rate=0.0, use_bias=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.num_heads = num_heads
@@ -78,7 +80,6 @@ class KBGAT(keras.Model):
         self.dropout = keras.layers.Dropout(drop_rate)
 
     def call(self, inputs, training=None, mask=None):
-
         (h_index, r_index, t_index), entity_embeddings, relation_embeddings = inputs
 
         entity_feature_list = []

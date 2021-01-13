@@ -7,6 +7,7 @@ if _tf.__version__[0] == "1":
 import KGFlow.data as data
 import KGFlow.dataset as dataset
 import KGFlow.utils as utils
+import KGFlow.model as model
 
 from KGFlow.data import *
 
