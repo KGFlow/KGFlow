@@ -1,0 +1,1 @@
+from KGFlow.metrics.distmult import distmult

@@ -50,15 +50,8 @@ class GAT(keras.Model):
 
         neighbor_msg = gcn_mapper(h, features, edge_weight=normed_att_score)
         reduced_msg = sum_reducer(neighbor_msg, h_index, num_nodes=num_entities)
-        features = identity_updater(features, reduced_msg)
+        features = identity_updater(entity_embeddings, reduced_msg)
 
-        # features = aggregate_neighbors(
-        #     features, [h_index, t_index], normed_att_score,
-        #     gcn_mapper,
-        #     sum_reducer,
-        #     identity_updater,
-        #     num_nodes=num_entities
-        # )
         if self.use_bias:
             features += self.bias
         features = self.activation(features)
@@ -76,8 +69,9 @@ class KBGAT(keras.Model):
                  relation_activation=tf.nn.relu, drop_rate=0.0, use_bias=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.num_heads = num_heads
         self.gats = [GAT(units, activation=activation, att_activation=att_activation, drop_rate=drop_rate,
-                         use_bias=use_bias) for _ in range(num_heads)]
+                         use_bias=use_bias) for _ in range(self.num_heads)]
 
         self.relation_kernel = tf.keras.layers.Dense(units=relation_units if relation_units else units,
                                                      activation=relation_activation)

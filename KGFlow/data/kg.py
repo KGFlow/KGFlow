@@ -106,13 +106,13 @@ class KG(object):
     @property
     def head_unique(self):
         if not self._head_unique:
-            self._head_unique = list(set(list(self.h)))
+            self._head_unique = sorted(list(set(list(self.h))))
         return self._head_unique
 
     @property
     def tail_unique(self):
         if not self._tail_unique:
-            self._tail_unique = list(set(list(self.t)))
+            self._tail_unique = sorted(list(set(list(self.t))))
         return self._tail_unique
 
     @property
