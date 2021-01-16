@@ -36,8 +36,8 @@ else:
 
 
 @tf.function
-def forword(batch_indices):
-    return model(batch_indices)
+def forward(batch_indices, training=False):
+    return model(batch_indices, training=training)
 
 
 @tf.function
@@ -51,7 +51,7 @@ def compute_loss(pos_scores, neg_scores):
 compute_ranks = tf.function(convkb_ranks)
 
 
-for epoch in range(0, 10001):
+for epoch in range(1, 10001):
     for step, (batch_h, batch_r, batch_t) in enumerate(
             tf.data.Dataset.from_tensor_slices((train_kg.h, train_kg.r, train_kg.t)).
                     shuffle(200000).batch(train_batch_size)):
@@ -65,8 +65,8 @@ for epoch in range(0, 10001):
                 batch_neg_target = entity_negative_sampling(batch_t, batch_r, train_kg, "head", filtered=False)
                 batch_neg_indices = [batch_neg_target, batch_r, batch_t]
 
-            pos_scores = forword([batch_h, batch_r, batch_t])
-            neg_scores = forword(batch_neg_indices)
+            pos_scores = forward([batch_h, batch_r, batch_t], training=True)
+            neg_scores = forward(batch_neg_indices, training=True)
 
             loss = compute_loss(pos_scores, neg_scores)
 
@@ -83,7 +83,7 @@ for epoch in range(0, 10001):
             ranks = []
             for (batch_h, batch_r, batch_t) in tf.data.Dataset.from_tensor_slices(
                     (test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size):
-                target_ranks = compute_ranks(batch_h, batch_r, batch_t, test_kg.num_entities, model, target_entity_type)
+                target_ranks = compute_ranks(batch_h, batch_r, batch_t, test_kg.num_entities, forward, target_entity_type)
                 ranks.append(target_ranks)
 
             ranks = tf.concat(ranks, axis=0)

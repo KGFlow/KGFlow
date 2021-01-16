@@ -6,32 +6,42 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
-from KGFlow.model.transe import TransE
+from KGFlow.model.transe import TransE, compute_distance, transe_ranks
 from KGFlow.dataset.wn18 import WN18Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
-
+from KGFlow.metrics.ranks import compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
 
 train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
 
-margin = 2
 embedding_size = 20
-train_batch_size = 200
-test_batch_size = 100
+train_batch_size = 8000
+test_batch_size = 200
+margin = 2.0
+distance_norm = 1
 
-optimizer = keras.optimizers.Adam(learning_rate=1e-2)
+learning_rate = 1e-2
+l2_coe = 0.0
+
+E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size,
+                             initializer=tf.keras.initializers.glorot_uniform())
+
+model = TransE(E.entity_embeddings, E.relation_embeddings)
 
 
-def compute_distance(a, b):
-    # return tf.reduce_sum(tf.math.square(a - b), axis=-1)
-    return tf.reduce_sum(tf.math.abs(a - b), axis=-1)
+@tf.function
+def forward(inputs, target_entity_type, training=False):
+    return model(inputs, target_entity_type=target_entity_type, training=training)
 
 
-model = TransE(train_kg.num_entities, train_kg.num_relations, embedding_size)
+compute_loss = tf.function(model.compute_loss)
+compute_ranks = tf.function(transe_ranks)
 
-for epoch in range(10000):
+optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+
+for epoch in range(1, 10001):
     for step, (batch_h, batch_r, batch_t) in enumerate(
             tf.data.Dataset.from_tensor_slices((train_kg.h, train_kg.r, train_kg.t)).
-                    shuffle(10000).batch(train_batch_size)):
+                    shuffle(200000).batch(train_batch_size)):
 
         target_entity_type = ["head", "tail"][np.random.randint(0, 2)]
         if target_entity_type == "tail":
@@ -43,17 +53,17 @@ for epoch in range(10000):
 
         with tf.GradientTape() as tape:
             batch_neg_target = entity_negative_sampling(batch_source, batch_r, train_kg, target_entity_type,
-                                                        filtered=True)
+                                                        filtered=False)
 
             embedded_neg_target = model.embed_norm_entities(batch_neg_target)
             embedded_target = model.embed_norm_entities(batch_target)
-            translated = model([batch_source, batch_r], target_entity_type)
 
-            pos_dis = compute_distance(translated, embedded_target)
-            neg_dis = compute_distance(translated, embedded_neg_target)
+            translated = forward([batch_source, batch_r], target_entity_type, training=True)
 
-            losses = tf.maximum(margin + pos_dis - neg_dis, 0.0)
-            loss = tf.reduce_mean(losses)
+            pos_dis = compute_distance(translated, embedded_target, distance_norm)
+            neg_dis = compute_distance(translated, embedded_neg_target, distance_norm)
+
+            loss = compute_loss(pos_dis, neg_dis, margin=margin, l2_coe=l2_coe)
 
         vars = tape.watched_variables()
         grads = tape.gradient(loss, vars)
@@ -67,28 +77,21 @@ for epoch in range(10000):
         normed_entity_embeddings = tf.math.l2_normalize(model.entity_embeddings, axis=-1)
 
         for target_entity_type in ["head", "tail"]:
-            mean_ranks = []
+            ranks = []
             for test_step, (batch_h, batch_r, batch_t) in enumerate(
                     tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size)):
+                target_ranks = compute_ranks(batch_h, batch_r, batch_t, forward, normed_entity_embeddings,
+                                             target_entity_type, distance_norm=distance_norm)
+                ranks.append(target_ranks)
 
-                if target_entity_type == "tail":
-                    batch_source = batch_h
-                    batch_target = batch_t
-                else:
-                    batch_source = batch_t
-                    batch_target = batch_h
+            ranks = tf.concat(ranks, axis=0)
 
-                translated = model([batch_source, batch_r], target_entity_type=target_entity_type)
+            mean_rank = compute_mean_rank(ranks)
+            mrr = compute_mean_reciprocal_rank(ranks)
+            hits_1, hits_3, hits_10, hits_100, hits_1000 = compute_hits(ranks, [1, 3, 10, 100, 1000])
 
-                tiled_entity_embeddings = tf.tile(tf.expand_dims(normed_entity_embeddings, axis=0),
-                                                  [batch_h.shape[0], 1, 1])
-                tiled_translated = tf.tile(tf.expand_dims(translated, axis=1),
-                                           [1, normed_entity_embeddings.shape[0], 1])
-                dis = compute_distance(tiled_translated, tiled_entity_embeddings)
-
-                ranks = tf.argsort(tf.argsort(dis, axis=1), axis=1).numpy()
-                target_ranks = ranks[np.arange(len(batch_target)), batch_target.numpy()]
-                mean_ranks.extend(target_ranks)
-
-            print("epoch = {}\ttarget_entity_type = {}\tmean_rank = {}".format(epoch, target_entity_type,
-                                                                               np.mean(mean_ranks)))
+            print(
+                "epoch = {}\ttarget_entity_type = {}\tMR = {}\tMRR = {}\t"
+                "Hits@1 = {}\tHits@3 = {}\tHits@10 = {}\tHits@100 = {}\tHits@1000 = {}".format(
+                    epoch, target_entity_type, mean_rank, mrr,
+                    hits_1, hits_3, hits_10, hits_100, hits_1000))

@@ -35,13 +35,20 @@ class ConvKB(tf.keras.Model):
 
 
 def convkb_loss(scores, labels, activation=tf.nn.softplus):
+    """
+    loss for ConvKB
+    :param scores:
+    :param labels: pos sample: +1, neg_sample: -1
+    :param activation:
+    :return: loss, shape: []
+    """
     scores = tf.reshape(scores, [-1])
     labels = tf.reshape(tf.cast(labels, dtype=tf.float32), [-1])
     losses = activation(scores * labels)
     return tf.reduce_mean(losses)
 
 
-def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_entity_type, direction='ASCENDING'):
+def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_entity_type):
     _batch_size = tf.shape(batch_h)[0]
     if target_entity_type == "tail":
         batch_source = batch_h
@@ -64,4 +71,4 @@ def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_e
     split_size = tf.tile([tf.shape(scores)[0] // _batch_size], [_batch_size])
     scores = tf.stack(tf.split(scores, split_size))
 
-    return compute_ranks_by_scores(scores, batch_target, direction=direction)
+    return compute_ranks_by_scores(scores, batch_target)
