@@ -18,6 +18,9 @@ class KG(object):
         self._id2relation = None
         self._id2entity = None
 
+        self._entities = None
+        self._relations = None
+
         self.hrt_dict = self.build_triple_dict(self.h, self.r, self.t)
         self._htr_dict = None
         self._trh_dict = None
@@ -76,6 +79,18 @@ class KG(object):
         if not self._tail_unique:
             self._tail_unique = sorted(list(set(list(self.t))))
         return self._tail_unique
+
+    @property
+    def entities(self):
+        if not self._entities:
+            self._entities = sorted(self.id2entity.keys())
+        return self._entities
+
+    @property
+    def relations(self):
+        if not self._relations:
+            self._relations = sorted(self.id2relation.keys())
+        return self._relations
 
     @property
     def num_entities(self):

@@ -5,8 +5,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 
-from tf_geometric.data.dataset import DownloadableDataset
-import json
+from KGFlow.data.dataset import DownloadableDataset
 
 from KGFlow.data.kg import KG
 
@@ -27,15 +26,28 @@ class CommonDataset(DownloadableDataset):
                 name2id[name] = id
         return name2id
 
-    def _read_triples(self, triple_path, entity2id: dict, relation2id: dict) -> KG:
+    def _read_name2vec(self, name2vec_path) -> np.ndarray:
+        print("reading name2vec_info: ", name2vec_path)
+        name2vec = []
+        with open(name2vec_path, "r", encoding="utf-8") as f:
+            for line in tqdm(f):
+                vec = list(map(float, line.strip().split()))
+                name2vec.append(vec)
+        return np.array(name2vec, dtype=np.float32)
+
+    def _read_triples(self, triple_path, entity2id: dict, relation2id: dict, triple_type="htr") -> KG:
         triples = []
         print("reading triples: ", triple_path)
+
         with open(triple_path, "r", encoding="utf-8") as f:
             for line in tqdm(f):
                 line = line.strip()
                 if len(line) == 0:
                     continue
-                head_entity, tail_entity, relation = line.split()
+                if triple_type == "hrt":
+                    head_entity, relation, tail_entity = line.split()
+                if triple_type == "htr":
+                    head_entity, tail_entity, relation = line.split()
                 triple = [
                     entity2id[head_entity],
                     relation2id[relation],

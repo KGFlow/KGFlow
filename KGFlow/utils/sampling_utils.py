@@ -14,7 +14,7 @@ def entity_negative_sampling(source_entities, relations, kg, target_entity_type=
     """
 
     if not filtered:
-        return np.random.choice(kg.num_entities, len(source_entities), replace=True)
+        return np.random.randint(0, kg.num_entities, len(source_entities))
 
     if target_entity_type == "tail":
         source_relation_target_dict = kg.hrt_dict

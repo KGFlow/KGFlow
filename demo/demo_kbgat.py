@@ -1,38 +1,50 @@
 # coding=utf-8
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
 from KGFlow.model.gat import KBGAT
-from KGFlow.dataset.wn18 import WN18Dataset
-from KGFlow.dataset.fb15k import FB15kDataset
+from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
+from KGFlow.metrics.ranks import compute_ranks_by_scores, compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
 
-train_kg, test_kg, valid_kg, entity2id, relation2id = FB15kDataset().load_data()
+# train_kg, test_kg, valid_kg, entity2id, relation2id = FB15kDataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id, entity_init_embeddings, relation_init_embeddings = FB15k237Dataset().load_data()
 
 num_entities = len(entity2id)
 num_relations = len(relation2id)
 print(train_kg, test_kg, valid_kg)
 
+init_embedding = True
 units_list = [50, 50]
-entity_embedding_size = 50
-relation_embedding_size = 50
+entity_embedding_size = 100
+relation_embedding_size = 100
 num_heads = 1
 
 drop_rate = 0.0
 l2_coe = 1e-3
 
+test_batch_size = 200
+learning_rate = 1e-2
+
+
+if init_embedding:
+    entity_embeddings = tf.Variable(entity_init_embeddings, name="entity_embeddings")
+    relation_embeddings = tf.Variable(relation_init_embeddings, name="relation_embeddings")
+else:
+    embedding_size = 20
+    E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size)
+    entity_embeddings, relation_embeddings = E()
+
 
 class KBGATModel(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.entity_embeddings = tf.Variable(tf.random.truncated_normal([num_entities, entity_embedding_size],
-                                                                        stddev=np.sqrt(1 / entity_embedding_size)))
-        self.relation_embeddings = tf.Variable(tf.random.truncated_normal([num_relations, relation_embedding_size],
-                                                                          stddev=np.sqrt(1 / relation_embedding_size)))
+        self.entity_embeddings = entity_embeddings
+        self.relation_embeddings = relation_embeddings
 
         self.gat0 = KBGAT(units=units_list[0], num_heads=num_heads, activation=None, relation_activation=tf.nn.relu)
         self.gat1 = KBGAT(units=units_list[1], num_heads=num_heads, activation=None, relation_activation=None)
@@ -43,12 +55,12 @@ class KBGATModel(keras.Model):
     def call(self, inputs, training=None, mask=None):
         h_index, r_index, t_index = inputs[0], inputs[1], inputs[2]
 
-        entity_embeddings = self.entity_embeddings
-        relation_embeddings = self.relation_embeddings
+        E_entity = self.entity_embeddings
+        E_relation = self.relation_embeddings
 
-        entity_embeddings = self.dropout(entity_embeddings, training=training)
-        entity_feature_list, relation_features = self.gat0([(h_index, r_index, t_index), entity_embeddings,
-                                                            relation_embeddings], training=training)
+        E_entity = self.dropout(E_entity, training=training)
+        entity_feature_list, relation_features = self.gat0([(h_index, r_index, t_index), E_entity,
+                                                            E_relation], training=training)
 
         entity_features = tf.concat(entity_feature_list, axis=-1)
         entity_features = self.dropout(entity_features, training=training)
@@ -88,11 +100,9 @@ def compute_distmult_loss(entity_features, relation_features, batch_source, batc
     return loss
 
 
-test_batch_size = 200
-learning_rate = 1e-2
 optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
-for epoch in range(1, 1000001):
+for epoch in range(1, 100001):
 
     with tf.GradientTape() as tape:
 
@@ -109,28 +119,27 @@ for epoch in range(1, 1000001):
 
         loss = compute_distmult_loss(entity_features, relation_features, source, train_kg.r, target, neg_target)
 
-        # kernel_vals = [var for var in tape.watched_variables() if "kernel" in var.name]
-        # l2_losses = [tf.nn.l2_loss(kernel_var) for kernel_var in kernel_vals]
-        # loss += tf.add_n(l2_losses) * l2_coe
+        kernel_vals = [var for var in tape.watched_variables() if "kernel" in var.name or "embedding" in var.name]
+        l2_losses = [tf.nn.l2_loss(kernel_var) for kernel_var in kernel_vals]
+        loss += tf.add_n(l2_losses) * l2_coe
 
-        # loss += (tf.nn.l2_loss(model.entity_embeddings) + tf.nn.l2_loss(model.relation_embeddings)) * l2_coe
 
     vars = tape.watched_variables()
     grads = tape.gradient(loss, vars)
     optimizer.apply_gradients(zip(grads, vars))
 
-    if epoch % 100 == 0:
+    if epoch % 1 == 0:
         print("epoch = {}\tloss = {}".format(epoch, loss))
 
-    if epoch % 1000 == 0:
+    if epoch % 20 == 0:
 
-        entity_embeddings, relation_embeddings = forward([test_kg.h, test_kg.r, test_kg.t], training=False)
+        E_entity, E_relation = forward([test_kg.h, test_kg.r, test_kg.t], training=False)
 
-        tiled_entity_embeddings = tf.tile(tf.expand_dims(entity_embeddings, axis=0),
+        tiled_entity_embeddings = tf.tile(tf.expand_dims(E_entity, axis=0),
                                           [test_batch_size, 1, 1])
 
         for target_entity_type in ["head", "tail"]:
-            all_ranks = []
+            ranks = []
             for test_step, (batch_h, batch_r, batch_t) in enumerate(
                     tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size)):
 
@@ -141,34 +150,28 @@ for epoch in range(1, 1000001):
                     batch_source = batch_t
                     batch_target = batch_h
 
-                s = tf.gather(entity_embeddings, batch_source, axis=0)
-                r = tf.gather(relation_embeddings, batch_r, axis=0)
+                s = tf.gather(E_entity, batch_source, axis=0)
+                r = tf.gather(E_relation, batch_r, axis=0)
 
-                tiled_sr = tf.tile(tf.expand_dims(s * r, axis=1), [1, entity_embeddings.shape[0], 1])
+                tiled_sr = tf.tile(tf.expand_dims(s * r, axis=1), [1, E_entity.shape[0], 1])
 
                 if tf.shape(tiled_entity_embeddings)[0] != tf.shape(batch_h)[0]:
-                    tiled_entity_embeddings = tf.tile(tf.expand_dims(entity_embeddings, axis=0),
+                    tiled_entity_embeddings = tf.tile(tf.expand_dims(E_entity, axis=0),
                                                       [tf.shape(batch_h)[0], 1, 1])
 
                 distmult = -tf.reduce_sum(tiled_sr * tiled_entity_embeddings, axis=-1)
 
-                ranks = tf.argsort(tf.argsort(distmult, axis=1), axis=1).numpy()
-                target_ranks = ranks[np.arange(len(batch_target)), batch_target.numpy()]
+                target_ranks = compute_ranks_by_scores(distmult, batch_target)
+                ranks.append(target_ranks)
 
-                all_ranks.extend(target_ranks)
+            ranks = tf.concat(ranks, axis=0)
 
-            all_ranks = np.array(all_ranks) + 1
-
-            mean_rank = np.mean(all_ranks)
-            mrr = np.mean(1 / all_ranks)
-            hits_1 = np.mean(all_ranks == 1)
-            hits_3 = np.mean(all_ranks <= 3)
-            hits_10 = np.mean(all_ranks <= 10)
-            hits_100 = np.mean(all_ranks <= 100)
-            hits_1000 = np.mean(all_ranks <= 1000)
+            mean_rank = compute_mean_rank(ranks)
+            mrr = compute_mean_reciprocal_rank(ranks)
+            hits_1, hits_3, hits_10, hits_100, hits_1000 = compute_hits(ranks, [1, 3, 10, 100, 1000])
 
             print(
-                "epoch = {}\ttarget_entity_type = {}\tmean_rank = {}\tmrr = {}\t"
-                "hits@1 = {}\thits@3 = {}\thits@10 = {}\thits@100 = {}\thits@1000 = {}".format(
+                "epoch = {}\ttarget_entity_type = {}\tMR = {}\tMRR = {}\t"
+                "Hits@1 = {}\tHits@3 = {}\tHits@10 = {}\tHits@100 = {}\tHits@1000 = {}".format(
                     epoch, target_entity_type, mean_rank, mrr,
                     hits_1, hits_3, hits_10, hits_100, hits_1000))

@@ -8,6 +8,7 @@ import KGFlow.data as data
 import KGFlow.dataset as dataset
 import KGFlow.utils as utils
 import KGFlow.model as model
+from KGFlow.utils.embedding_utils import RandomInitEmbeddings
 
 from KGFlow.data import *
 
