@@ -16,7 +16,7 @@ train_kg, test_kg, valid_kg, entity2id, relation2id, entity_embeddings, relation
 
 init_embedding = True
 num_filters = 64
-train_batch_size = 200
+train_batch_size = 8000
 test_batch_size = 10
 
 learning_rate = 1e-4
