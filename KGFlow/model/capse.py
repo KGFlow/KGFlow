@@ -158,10 +158,6 @@ def squash(vector):
     return(vec_squashed)
 
 
-
-import math
-
-
 class CapsE(tf.keras.Model):
     def __init__(self, E_e, E_r, sequence_length, embedding_size, num_filters, vocab_size, iter_routing, batch_size=256,
                  num_outputs_secondCaps=1, vec_len_secondCaps=10, initialization=[], filter_size=1, useConstantInit=False):

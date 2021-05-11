@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from KGFlow.nn import gcn_mapper, identity_updater, sum_reducer
+from KGFlow.utils.map_reduce import gcn_mapper, identity_updater, sum_reducer
 from KGFlow.utils.segment import segment_softmax
 
 

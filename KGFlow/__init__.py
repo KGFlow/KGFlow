@@ -1,8 +1,8 @@
 # coding=utf-8
-import tensorflow as _tf
+import tensorflow as __tf
 
-if _tf.__version__[0] == "1":
-    _tf.enable_eager_execution()
+if __tf.__version__[0] == "1":
+    __tf.enable_eager_execution()
 
 import KGFlow.data as data
 import KGFlow.dataset as dataset
