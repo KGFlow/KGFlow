@@ -2,9 +2,8 @@
 
 import tensorflow as tf
 from tensorflow import keras
-import numpy as np
-from KGFlow.nn import aggregate_neighbors, gcn_mapper, identity_updater, sum_reducer
-from KGFlow.nn.kernel.segment import segment_softmax
+from KGFlow.nn import gcn_mapper, identity_updater, sum_reducer
+from KGFlow.utils.segment import segment_softmax
 
 
 class GAT(keras.Model):

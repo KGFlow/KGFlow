@@ -60,9 +60,12 @@ class CommonDataset(DownloadableDataset):
         tails = triples[:, 2]
         return KG(heads, relations, tails, entity2id, relation2id)
 
-    def process(self) -> Tuple[KG, KG, KG, dict, dict]:
+    def common_process(self, triple_type="hrt") -> Tuple[KG, KG, KG, dict, dict]:
+        """
 
-        data_dir = os.path.join(self.raw_root_path, self.dataset_name)
+        triple_type: 'hrt' | 'htr'
+        """
+        data_dir = self.data_dir
 
         test_triple_path = os.path.join(data_dir, "test.txt")
         train_triple_path = os.path.join(data_dir, "train.txt")
@@ -74,8 +77,11 @@ class CommonDataset(DownloadableDataset):
         entity2id = self._read_name2id(entity_path)
         relation2id = self._read_name2id(relation_path)
 
-        train_kg = self._read_triples(train_triple_path, entity2id, relation2id)
-        test_kg = self._read_triples(test_triple_path, entity2id, relation2id)
-        valid_kg = self._read_triples(valid_triple_path, entity2id, relation2id)
+        train_kg = self._read_triples(train_triple_path, entity2id, relation2id, triple_type)
+        test_kg = self._read_triples(test_triple_path, entity2id, relation2id, triple_type)
+        valid_kg = self._read_triples(valid_triple_path, entity2id, relation2id, triple_type)
 
         return train_kg, test_kg, valid_kg, entity2id, relation2id
+
+    def process(self):
+        return self.common_process()

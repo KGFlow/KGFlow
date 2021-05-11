@@ -38,6 +38,7 @@ class DownloadableDataset(object):
         self.download_root_path = os.path.join(self.dataset_root_path, "download")
         self.raw_root_path = os.path.join(self.dataset_root_path, "raw")
         self.processed_root_path = os.path.join(self.dataset_root_path, "processed")
+        self.data_dir = os.path.join(self.raw_root_path, self.dataset_name)
 
         if download_file_name is None:
             self.download_file_name = "{}.zip".format(dataset_name)

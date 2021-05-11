@@ -115,7 +115,7 @@ for epoch in range(1, 100001):
         else:
             source = train_kg.t
             target = train_kg.h
-        neg_target = entity_negative_sampling(source, train_kg.r, train_kg, target_entity_type, filtered=True)
+        neg_target = entity_negative_sampling(source, train_kg.r, train_kg, target_entity_type, filtered=False)
 
         loss = compute_distmult_loss(entity_features, relation_features, source, train_kg.r, target, neg_target)
 

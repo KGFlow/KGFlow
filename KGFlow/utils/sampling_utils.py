@@ -1,5 +1,7 @@
 import numpy as np
 from KGFlow.data.kg import KG
+import tensorflow as tf
+import collections
 
 
 def entity_negative_sampling(source_entities, relations, kg, target_entity_type="tail", filtered=False):
@@ -31,6 +33,56 @@ def entity_negative_sampling(source_entities, relations, kg, target_entity_type=
                 break
 
     return np.array(neg_entities)
+
+
+class EntityNegativeSampler:
+    def __init__(self, kg: KG):
+        self.kg = kg
+        self.entity_set = set(list(range(kg.num_entities)))
+
+    def random_sampling(self, batch_size, num_neg=1):
+
+        return np.random.randint(0, self.kg.num_entities, num_neg * batch_size)
+
+    def target_sampling(self, source_entities, relations, target_entity_type, num_neg=1, filtered=True):
+        if not filtered:
+            return self.random_sampling(len(source_entities), num_neg)
+
+        if target_entity_type == "tail":
+            sro_dict = self.kg.hrt_dict
+        else:
+            sro_dict = self.kg.trh_dict
+
+        neg_target_list = []
+        for s, r in zip(source_entities, relations):
+
+            pos_o_set = sro_dict[int(s)][int(r)]
+            neg_target = []
+            while len(neg_target) < num_neg:
+                entity = np.random.randint(0, self.kg.num_entities)
+                if int(entity) not in pos_o_set:
+                    neg_target.append(entity)
+            neg_target_list.append(neg_target)
+
+        neg_target_entities = np.stack(neg_target_list, axis=-1).reshape([-1])
+        return neg_target_entities
+
+    def target_indices_sampling(self, source_entities, relations, target_entity_type, num_neg=1, filtered=True):
+        neg_o = self.target_sampling(source_entities, relations, target_entity_type, num_neg, filtered)
+        tiled_s = np.tile(source_entities, [num_neg])
+        tiled_r = np.tile(relations, [num_neg])
+        if target_entity_type == "tail":
+            indices = [tiled_s, tiled_r, neg_o]
+        else:
+            indices = [neg_o, tiled_r, tiled_s]
+        indices = np.stack(indices)
+        return indices
+
+    def indices_sampling(self, h, r, t, num_neg=1, filtered=False):
+        neg_indices_h = self.target_indices_sampling(t, r, target_entity_type="head", num_neg=num_neg, filtered=filtered)
+        neg_indices_t = self.target_indices_sampling(h, r, target_entity_type="tail", num_neg=num_neg, filtered=filtered)
+        neg_entities = np.concatenate([neg_indices_h, neg_indices_t], axis=-1)
+        return neg_entities
 
 
 class NeighborSampler:

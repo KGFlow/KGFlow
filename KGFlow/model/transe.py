@@ -6,15 +6,13 @@ from KGFlow.metrics.ranks import compute_ranks_by_scores
 
 
 class TransE(tf.keras.Model):
-    def __init__(self, entity_embeddings, relation_embeddings, embedding2constant=False, *args, **kwargs):
+    def __init__(self, entity_embeddings, relation_embeddings, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entity_embeddings = entity_embeddings
         self.relation_embeddings = relation_embeddings
-        if embedding2constant:
-            self.entity_embeddings = tf.constant(self.entity_embeddings)
-            self.relation_embeddings = tf.constant(self.relation_embeddings)
 
-    def embed_norm(self, embeddings, indices):
+    @staticmethod
+    def embed_norm(embeddings, indices):
 
         # if embedding table is smaller, normalizing first is more efficient
         if embeddings.shape[0] < len(indices):
@@ -26,7 +24,8 @@ class TransE(tf.keras.Model):
         return self.embed_norm(self.entity_embeddings, entities)
 
     def embed_norm_relations(self, relations):
-        return self.embed_norm(self.relation_embeddings, relations)
+        relation_embeddings = tf.concat([self.relation_embeddings, -self.relation_embeddings], axis=0)
+        return self.embed_norm(relation_embeddings, relations)
 
     def call(self, inputs, target_entity_type="tail", training=None, mask=None):
         """
@@ -54,7 +53,7 @@ class TransE(tf.keras.Model):
         loss = transe_loss(pos_logits, neg_logits, margin)
         if l2_coe > 0.0:
             loss += tf.add_n([tf.nn.l2_loss(var) for var in self.trainable_variables if
-                              "kernel" in var.name or "embedding" in var.name]) * l2_coe
+                              "kernel" in var.name or "embedding" in var.name] + [0.0]) * l2_coe
         return loss
 
 
@@ -71,7 +70,7 @@ def compute_distance(a, b, norm=1):
         return tf.reduce_sum(tf.math.square(a - b), axis=-1)
 
 
-def transe_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, target_entity_type, distance_norm=1):
+def transe_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, target_entity_type, distance_norm=1, filter_list=None):
 
     if target_entity_type == "tail":
         batch_source = batch_h
@@ -86,6 +85,15 @@ def transe_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, tar
                                       [batch_h.shape[0], 1, 1])
     tiled_translated = tf.tile(tf.expand_dims(translated, axis=1),
                                [1, entity_embeddings.shape[0], 1])
-    dis = compute_distance(tiled_translated, tiled_entity_embeddings, distance_norm)
+    scores = compute_distance(tiled_translated, tiled_entity_embeddings, distance_norm)
 
-    return compute_ranks_by_scores(dis, batch_target)
+    if filter_list:
+        filter_indices = []
+        for i, filters in enumerate(filter_list):
+            for entity in filters:
+                filter_indices.append([i, entity])
+        if filter_indices:
+            scores = tf.tensor_scatter_nd_update(scores, filter_indices, [float("inf")] * len(filter_indices))
+
+
+    return compute_ranks_by_scores(scores, batch_target)

@@ -3,7 +3,7 @@ from tensorflow.keras.layers import Conv1D, Dropout, BatchNormalization, Dense
 
 
 class ConvKBLayer(tf.keras.Model):
-    def __init__(self, num_filters, kernel_size, activation=tf.nn.relu, drop_rate=0.0, use_bn=True, *args, **kwargs):
+    def __init__(self, num_filters, kernel_size=1, activation=tf.nn.relu, drop_rate=0.0, use_bn=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conv1d = Conv1D(num_filters, kernel_size)
         self.activation = activation if activation else lambda x: x
@@ -22,9 +22,9 @@ class ConvKBLayer(tf.keras.Model):
         :param mask:
         :return: a score Tensor which shape is (batch_size, 1)
         """
-        h, r, t = inputs
+        # h, r, t = inputs[0], inputs[1], inputs[2]
 
-        f = tf.stack([h, r, t], axis=-1)  # (batch * dim * 3)
+        f = tf.stack(inputs, axis=-1)  # (batch * dim * 3)
         if self.use_bn:
             f = self.bn1(f, training=training)
         f = self.conv1d(f)
@@ -36,7 +36,7 @@ class ConvKBLayer(tf.keras.Model):
 
         scores = self.kernel(f)
 
-        return scores
+        return -scores
 
 
 

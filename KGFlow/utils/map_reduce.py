@@ -1,7 +1,7 @@
 # coding=utf-8
 
 import tensorflow as tf
-from KGFlow.nn.kernel.segment import segment_op_with_pad
+from KGFlow.utils.segment import segment_op_with_pad
 
 
 def identity_mapper(repeated_x, neighbor_x, edge_weight=None):

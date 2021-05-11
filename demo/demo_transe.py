@@ -1,26 +1,36 @@
 # coding=utf-8
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
 from KGFlow.model.transe import TransE, compute_distance, transe_ranks
 from KGFlow.dataset.wn18 import WN18Dataset
+
+from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
 from KGFlow.metrics.ranks import compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
+from KGFlow.utils.rank_utils import get_filter_dict
+import matplotlib.pyplot as plt
 
-train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
+# train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id, entity_init_embeddings, relation_init_embeddings = FB15k237Dataset().load_data()
 
 embedding_size = 20
-train_batch_size = 8000
+train_n_batch = 100
+train_batch_size = train_kg.num_triples // train_n_batch
 test_batch_size = 200
 margin = 2.0
 distance_norm = 1
 
 learning_rate = 1e-2
 l2_coe = 0.0
+
+filter = True
+filter_dict = get_filter_dict(test_kg, [train_kg, valid_kg]) if filter else None
 
 E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size,
                              initializer=tf.keras.initializers.glorot_uniform())
@@ -34,14 +44,14 @@ def forward(inputs, target_entity_type, training=False):
 
 
 compute_loss = tf.function(model.compute_loss)
-compute_ranks = tf.function(transe_ranks)
+compute_ranks = transe_ranks
 
 optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
 for epoch in range(1, 10001):
     for step, (batch_h, batch_r, batch_t) in enumerate(
             tf.data.Dataset.from_tensor_slices((train_kg.h, train_kg.r, train_kg.t)).
-                    shuffle(200000).batch(train_batch_size)):
+                    shuffle(300000).batch(train_batch_size)):
 
         target_entity_type = ["head", "tail"][np.random.randint(0, 2)]
         if target_entity_type == "tail":
@@ -72,7 +82,7 @@ for epoch in range(1, 10001):
         if step % 200 == 0:
             print("epoch = {}\tstep = {}\tloss = {}".format(epoch, step, loss))
 
-    if epoch % 10 == 0:
+    if epoch % 200 == 0:
 
         normed_entity_embeddings = tf.math.l2_normalize(model.entity_embeddings, axis=-1)
 
@@ -81,10 +91,12 @@ for epoch in range(1, 10001):
             for test_step, (batch_h, batch_r, batch_t) in enumerate(
                     tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size)):
                 target_ranks = compute_ranks(batch_h, batch_r, batch_t, forward, normed_entity_embeddings,
-                                             target_entity_type, distance_norm=distance_norm)
+                                             target_entity_type, distance_norm=distance_norm, filter_list=filter_dict[target_entity_type])
                 ranks.append(target_ranks)
 
             ranks = tf.concat(ranks, axis=0)
+            plt.hist(ranks.numpy(), 25, range=(0, 250))
+            plt.show()
 
             mean_rank = compute_mean_rank(ranks)
             mrr = compute_mean_reciprocal_rank(ranks)

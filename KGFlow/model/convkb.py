@@ -5,18 +5,15 @@ from KGFlow.metrics.ranks import compute_ranks_by_scores
 
 class ConvKB(tf.keras.Model):
     def __init__(self, entity_embeddings, relation_embeddings, num_filters=64, kernel_size=1, activation=tf.nn.relu,
-                 drop_rate=0.0, use_bn=True, embedding2constant=False):
+                 drop_rate=0.0, use_bn=False):
         super().__init__()
         self.entity_embeddings = entity_embeddings
         self.relation_embeddings = relation_embeddings
-        if embedding2constant:
-            self.entity_embeddings = tf.constant(self.entity_embeddings)
-            self.relation_embeddings = tf.constant(self.relation_embeddings)
 
         self.convkb = ConvKBLayer(num_filters, kernel_size, activation, drop_rate, use_bn)
 
-    def call(self, inputs, training=None, mask=None, compute_l2_loss=False):
-        h_index, r_index, t_index = inputs
+    def call(self, inputs, training=None, mask=None):
+        h_index, r_index, t_index = inputs[0], inputs[1], inputs[2]
 
         h = tf.nn.embedding_lookup(self.entity_embeddings, h_index)
         r = tf.nn.embedding_lookup(self.relation_embeddings, r_index)
@@ -26,11 +23,8 @@ class ConvKB(tf.keras.Model):
 
         return scores
 
-    def compute_loss(self, scores, labels, activation=tf.nn.softplus, l2_coe=0.0):
+    def compute_loss(self, scores, labels, activation=tf.nn.softplus):
         loss = convkb_loss(scores, labels, activation)
-        if l2_coe > 0.0:
-            loss += tf.add_n([tf.nn.l2_loss(var) for var in self.trainable_variables if
-                              "kernel" in var.name or "embedding" in var.name]) * l2_coe
         return loss
 
 
@@ -66,7 +60,7 @@ def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_e
     else:
         tiled_indices = [tiled_o, tiled_r, tiled_s]
 
-    scores = convkb_model(tiled_indices, training=False)
+    scores = convkb_model(tiled_indices)
     scores = tf.reshape(scores, [-1])
     split_size = tf.tile([tf.shape(scores)[0] // _batch_size], [_batch_size])
     scores = tf.stack(tf.split(scores, split_size))

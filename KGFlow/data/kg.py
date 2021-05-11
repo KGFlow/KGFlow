@@ -32,8 +32,8 @@ class KG(object):
         source_relation_target_dict = {}
 
         for source, relation, target in tqdm(zip(source_entities, relations, target)):
-            relation_target_dict = source_relation_target_dict.setdefault(source, {})
-            relation_target_dict.setdefault(relation, set()).add(target)
+            relation_target_dict = source_relation_target_dict.setdefault(int(source), dict())
+            relation_target_dict.setdefault(int(relation), set()).add(int(target))
 
         return source_relation_target_dict
 
