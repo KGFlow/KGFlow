@@ -1,1 +1,0 @@
-from KGFlow.nn.kernel.map_reduce import *
