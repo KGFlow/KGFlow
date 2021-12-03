@@ -1,7 +1,7 @@
 # coding=utf-8
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow import keras
@@ -14,7 +14,6 @@ from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
 from KGFlow.metrics.ranks import compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
 from KGFlow.utils.rank_utils import get_filter_dict
-import matplotlib.pyplot as plt
 
 # train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
 train_kg, test_kg, valid_kg, entity2id, relation2id, entity_init_embeddings, relation_init_embeddings = FB15k237Dataset().load_data()
@@ -91,12 +90,11 @@ for epoch in range(1, 10001):
             for test_step, (batch_h, batch_r, batch_t) in enumerate(
                     tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size)):
                 target_ranks = compute_ranks(batch_h, batch_r, batch_t, forward, normed_entity_embeddings,
-                                             target_entity_type, distance_norm=distance_norm, filter_list=filter_dict[target_entity_type])
+                                             target_entity_type, distance_norm=distance_norm,
+                                             filter_list=filter_dict[target_entity_type])
                 ranks.append(target_ranks)
 
             ranks = tf.concat(ranks, axis=0)
-            plt.hist(ranks.numpy(), 25, range=(0, 250))
-            plt.show()
 
             mean_rank = compute_mean_rank(ranks)
             mrr = compute_mean_reciprocal_rank(ranks)
