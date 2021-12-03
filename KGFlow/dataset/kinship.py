@@ -16,9 +16,8 @@ class KinshipDataset(CommonDataset):
                              ""
                          ],
                          download_file_name="Kinship.zip",
-                         cache_name=None,#"cache.p",
+                         cache_name=None,  # "cache.p",
                          dataset_root_path=dataset_root_path)
 
     def process(self):
         return self.common_process(triple_type="hrt")
-

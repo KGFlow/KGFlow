@@ -1,6 +1,6 @@
 import tensorflow as tf
 from KGFlow.metrics.convkb import ConvKBLayer
-from KGFlow.metrics.ranks import compute_ranks_by_scores
+from KGFlow.metrics.ranking import compute_ranks_by_scores
 
 
 class ConvKB(tf.keras.Model):

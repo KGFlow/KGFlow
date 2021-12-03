@@ -1,7 +1,7 @@
 # coding=utf-8
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow import keras
@@ -10,10 +10,14 @@ from KGFlow.model.capse import CapsE
 from KGFlow.dataset.fb15k import FB15k237Dataset
 from KGFlow.utils.sampling_utils import EntityNegativeSampler
 from KGFlow.utils.rank_utils import get_filter_dict, compute_ranks
-from KGFlow.metrics.ranks import compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
+from KGFlow.evaluation import evaluate_rank_scores
 
-
-train_kg, test_kg, valid_kg, entity2id, relation2id, entity_embeddings, relation_embeddings = FB15k237Dataset().load_data()
+# data_dict = WN18Dataset().load_data()
+data_dict = FB15k237Dataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id = (data_dict[name] for name in
+                                                       ["train_kg", "test_kg", "valid_kg", "entity2id", "relation2id"])
+entity_init_embeddings, relation_init_embeddings = (data_dict.get(name, None) for name in
+                                                    ["entity_embeddings", "relation_embeddings"])
 
 init_embedding = True
 filter = True
@@ -32,8 +36,8 @@ optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
 if init_embedding:
     embedding_size = 100
-    entity_embeddings = tf.Variable(entity_embeddings, name="entity_embeddings")
-    relation_embeddings = tf.Variable(relation_embeddings, name="relation_embeddings")
+    entity_embeddings = tf.Variable(entity_init_embeddings, name="entity_embeddings")
+    relation_embeddings = tf.Variable(relation_init_embeddings, name="relation_embeddings")
 else:
     embedding_size = 20
     E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size)
@@ -99,12 +103,6 @@ for epoch in range(0, 10001):
         for target_entity_type in ["head", "tail"]:
             ranks = compute_ranks(test_kg, forward, target_entity_type, test_batch_size, filter_dict)
 
-            mean_rank = compute_mean_rank(ranks)
-            mrr = compute_mean_reciprocal_rank(ranks)
-            # hits_1, hits_3, hits_10, hits_100, hits_1000 = compute_hits(ranks, [1, 3, 10, 100, 1000])
-            hits_1, hits_10, hits_100 = compute_hits(ranks, [1, 10, 100])
-            print(
-                "epoch = {}\ttarget_entity_type = {}\tMR = {:f}\tMRR = {:f}\t"
-                "Hits@10 = {:f}\tHits@1 = {:f}\tHits@100 = {:f}".format(
-                    epoch, target_entity_type, mean_rank, mrr,
-                    hits_10, hits_1, hits_100))
+            print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
+            res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
+            print(res_scores)

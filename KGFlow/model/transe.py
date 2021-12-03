@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
-from KGFlow.metrics.ranks import compute_ranks_by_scores
+from KGFlow.metrics.ranking import compute_ranks_by_scores
 
 
 class TransE(tf.keras.Model):
@@ -70,8 +70,8 @@ def compute_distance(a, b, norm=1):
         return tf.reduce_sum(tf.math.square(a - b), axis=-1)
 
 
-def transe_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, target_entity_type, distance_norm=1, filter_list=None):
-
+def transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, target_entity_type, distance_norm=1,
+                       filter_list=None):
     if target_entity_type == "tail":
         batch_source = batch_h
         batch_target = batch_t
@@ -95,5 +95,18 @@ def transe_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings, tar
         if filter_indices:
             scores = tf.tensor_scatter_nd_update(scores, filter_indices, [float("inf")] * len(filter_indices))
 
-
     return compute_ranks_by_scores(scores, batch_target)
+
+
+def transe_ranks(h, r, t, transe_model, entity_embeddings, target_entity_type, batch_size=200, distance_norm=1,
+                 filter_list=None):
+    ranks = []
+    for test_step, (batch_h, batch_r, batch_t) in enumerate(
+            tf.data.Dataset.from_tensor_slices((h, r, t)).batch(batch_size)):
+        target_ranks = transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings,
+                                          target_entity_type, distance_norm, filter_list)
+        ranks.append(target_ranks)
+
+    ranks = tf.concat(ranks, axis=0)
+
+    return ranks

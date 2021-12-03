@@ -33,14 +33,17 @@ class FB15k237Dataset(CommonDataset):
                          cache_name=None,#"cache.p",
                          dataset_root_path=dataset_root_path)
 
-    def process(self) -> Tuple[KG, KG, KG, dict, dict, np.ndarray, np.ndarray]:
+    def process(self) -> dict:
 
-        train_kg, test_kg, valid_kg, entity2id, relation2id = self.common_process("hrt")
+        # train_kg, test_kg, valid_kg, entity2id, relation2id = self.common_process("hrt")
+        data_dict = self.common_process("hrt")
 
         entity2vec_path = os.path.join(self.data_dir, "entity2vec.txt")
         relation2vec_path = os.path.join(self.data_dir, "relation2vec.txt")
 
-        entity_embeddings = self._read_name2vec(entity2vec_path)
-        relation_embeddings = self._read_name2vec(relation2vec_path)
+        data_dict["entity_embeddings"] = self._read_name2vec(entity2vec_path)
+        data_dict["relation_embeddings"] = self._read_name2vec(relation2vec_path)
 
-        return train_kg, test_kg, valid_kg, entity2id, relation2id, entity_embeddings, relation_embeddings
+        # return train_kg, test_kg, valid_kg, entity2id, relation2id, entity_embeddings, relation_embeddings
+        return data_dict
+

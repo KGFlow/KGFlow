@@ -17,15 +17,15 @@ def compute_ranks_by_scores(scores, target_indices, direction='ASCENDING'):
     return target_ranks + 1
 
 
-def compute_hits(ranks, nums):
-    if isinstance(nums, int):
-        return np.mean(np.array(ranks) <= nums)
-    return [np.mean(np.array(ranks) <= num) for num in nums]
+def hits_score(ranks, k_list):
+    if isinstance(k_list, int):
+        return np.mean(np.array(ranks) <= k_list)
+    return [np.mean(np.array(ranks) <= k) for k in k_list]
 
 
-def compute_mean_rank(ranks):
+def mean_rank_score(ranks):
     return np.mean(ranks)
 
 
-def compute_mean_reciprocal_rank(ranks):
+def mean_reciprocal_rank_score(ranks):
     return np.mean(1 / ranks)

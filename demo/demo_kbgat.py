@@ -9,10 +9,15 @@ import KGFlow as kgf
 from KGFlow.model.gat import KBGAT
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
-from KGFlow.metrics.ranks import compute_ranks_by_scores, compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
+from KGFlow.metrics.ranking import compute_ranks_by_scores
+from KGFlow.evaluation import evaluate_rank_scores
 
-# train_kg, test_kg, valid_kg, entity2id, relation2id = FB15kDataset().load_data()
-train_kg, test_kg, valid_kg, entity2id, relation2id, entity_init_embeddings, relation_init_embeddings = FB15k237Dataset().load_data()
+# data_dict = WN18Dataset().load_data()
+data_dict = FB15k237Dataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id = (data_dict[name] for name in
+                                                       ["train_kg", "test_kg", "valid_kg", "entity2id", "relation2id"])
+entity_init_embeddings, relation_init_embeddings = (data_dict.get(name, None) for name in
+                                                    ["entity_embeddings", "relation_embeddings"])
 
 num_entities = len(entity2id)
 num_relations = len(relation2id)
@@ -166,12 +171,6 @@ for epoch in range(1, 100001):
 
             ranks = tf.concat(ranks, axis=0)
 
-            mean_rank = compute_mean_rank(ranks)
-            mrr = compute_mean_reciprocal_rank(ranks)
-            hits_1, hits_3, hits_10, hits_100, hits_1000 = compute_hits(ranks, [1, 3, 10, 100, 1000])
-
-            print(
-                "epoch = {}\ttarget_entity_type = {}\tMR = {}\tMRR = {}\t"
-                "Hits@1 = {}\tHits@3 = {}\tHits@10 = {}\tHits@100 = {}\tHits@1000 = {}".format(
-                    epoch, target_entity_type, mean_rank, mrr,
-                    hits_1, hits_3, hits_10, hits_100, hits_1000))
+            print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
+            res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
+            print(res_scores)

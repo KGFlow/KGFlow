@@ -9,14 +9,17 @@ import numpy as np
 import KGFlow as kgf
 from KGFlow.model.transe import TransE, compute_distance, transe_ranks
 from KGFlow.dataset.wn18 import WN18Dataset
-
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
-from KGFlow.metrics.ranks import compute_hits, compute_mean_rank, compute_mean_reciprocal_rank
+from KGFlow.evaluation import evaluate_rank_scores
 from KGFlow.utils.rank_utils import get_filter_dict
 
-# train_kg, test_kg, valid_kg, entity2id, relation2id = WN18Dataset().load_data()
-train_kg, test_kg, valid_kg, entity2id, relation2id, entity_init_embeddings, relation_init_embeddings = FB15k237Dataset().load_data()
+# data_dict = WN18Dataset().load_data()
+data_dict = FB15k237Dataset().load_data()
+train_kg, test_kg, valid_kg, entity2id, relation2id = (data_dict[name] for name in
+                                                       ["train_kg", "test_kg", "valid_kg", "entity2id", "relation2id"])
+entity_init_embeddings, relation_init_embeddings = (data_dict.get(name, None) for name in
+                                                    ["entity_embeddings", "relation_embeddings"])
 
 embedding_size = 20
 train_n_batch = 100
@@ -83,25 +86,13 @@ for epoch in range(1, 10001):
 
     if epoch % 200 == 0:
 
-        normed_entity_embeddings = tf.math.l2_normalize(model.entity_embeddings, axis=-1)
+        normed_entity_embeddings = tf.nn.l2_normalize(model.entity_embeddings, axis=-1)
 
         for target_entity_type in ["head", "tail"]:
-            ranks = []
-            for test_step, (batch_h, batch_r, batch_t) in enumerate(
-                    tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(test_batch_size)):
-                target_ranks = compute_ranks(batch_h, batch_r, batch_t, forward, normed_entity_embeddings,
-                                             target_entity_type, distance_norm=distance_norm,
-                                             filter_list=filter_dict[target_entity_type])
-                ranks.append(target_ranks)
+            ranks = compute_ranks(test_kg.h, test_kg.r, test_kg.t, forward, normed_entity_embeddings,
+                                  target_entity_type, test_batch_size, distance_norm=distance_norm,
+                                  filter_list=filter_dict[target_entity_type])
 
-            ranks = tf.concat(ranks, axis=0)
-
-            mean_rank = compute_mean_rank(ranks)
-            mrr = compute_mean_reciprocal_rank(ranks)
-            hits_1, hits_3, hits_10, hits_100, hits_1000 = compute_hits(ranks, [1, 3, 10, 100, 1000])
-
-            print(
-                "epoch = {}\ttarget_entity_type = {}\tMR = {}\tMRR = {}\t"
-                "Hits@1 = {}\tHits@3 = {}\tHits@10 = {}\tHits@100 = {}\tHits@1000 = {}".format(
-                    epoch, target_entity_type, mean_rank, mrr,
-                    hits_1, hits_3, hits_10, hits_100, hits_1000))
+            print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
+            res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
+            print(res_scores)
