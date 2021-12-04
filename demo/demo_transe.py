@@ -32,7 +32,7 @@ learning_rate = 1e-2
 l2_coe = 0.0
 
 filter = True
-filter_dict = get_filter_dict(test_kg, [train_kg, valid_kg]) if filter else None
+filter_dict = get_filter_dict(test_kg, [train_kg, valid_kg]) if filter else {}
 
 E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size,
                              initializer=tf.keras.initializers.glorot_uniform())
@@ -91,8 +91,7 @@ for epoch in range(1, 10001):
         for target_entity_type in ["head", "tail"]:
             ranks = compute_ranks(test_kg.h, test_kg.r, test_kg.t, forward, normed_entity_embeddings,
                                   target_entity_type, test_batch_size, distance_norm=distance_norm,
-                                  filter_list=filter_dict[target_entity_type])
-
+                                  filter_list=filter_dict.get(target_entity_type))
             print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
             res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
             print(res_scores)

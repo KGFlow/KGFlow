@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
-from KGFlow.model.convkb import ConvKB, convkb_ranks
+from KGFlow.model.convkb import ConvKBE, convkb_ranks
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling, EntityNegativeSampler
 from KGFlow.utils.rank_utils import get_filter_dict, compute_ranks
@@ -33,7 +33,6 @@ learning_rate = 1e-2
 drop_rate = 0.5
 l2_coe = 0.01
 
-
 filter_dict = get_filter_dict(test_kg, [train_kg, valid_kg]) if filter else None
 optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
@@ -45,15 +44,16 @@ else:
     E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size)
     entity_embeddings, relation_embeddings = E()
 
-model = ConvKB(entity_embeddings, relation_embeddings, num_filters, drop_rate=drop_rate, use_bn=False)
+model = ConvKBE(entity_embeddings, relation_embeddings, num_filters, drop_rate=drop_rate, use_bn=False)
 sampler = EntityNegativeSampler(train_kg)
 
-# @tf.function
+
+@tf.function
 def forward(batch_indices, training=False):
     return model(batch_indices, training=training)
 
 
-# @tf.function
+@tf.function
 def compute_loss(pos_scores, neg_scores):
     loss = model.compute_loss(tf.concat([pos_scores, neg_scores], axis=0),
                               tf.concat([tf.ones_like(pos_scores), -tf.ones_like(neg_scores)], axis=0),
@@ -67,17 +67,18 @@ for epoch in range(1, 10001):
                     shuffle(300000).batch(train_batch_size)):
 
         with tf.GradientTape() as tape:
-            batch_neg_indices = sampler.indices_sampling(batch_h, batch_r, batch_t, num_neg=num_neg, filtered=train_filtered)
+            batch_neg_indices = sampler.indices_sampling(batch_h, batch_r, batch_t, num_neg=num_neg,
+                                                         filtered=train_filtered)
 
             pos_scores = forward([batch_h, batch_r, batch_t], training=True)
             neg_scores = forward(batch_neg_indices, training=True)
 
             loss = compute_loss(pos_scores, neg_scores)
 
-            l2_loss = tf.add_n([tf.reduce_mean(var**2) for var in tape.watched_variables() if "kernel" in var.name])
-            l2_loss += tf.add_n([tf.reduce_mean(tf.gather(entity_embeddings, batch_neg_indices[0])**2),
-                                 tf.reduce_mean(tf.gather(relation_embeddings, batch_neg_indices[1])**2),
-                                 tf.reduce_mean(tf.gather(entity_embeddings, batch_neg_indices[2]))**2])
+            l2_loss = tf.add_n([tf.reduce_mean(var ** 2) for var in tape.watched_variables() if "kernel" in var.name])
+            l2_loss += tf.add_n([tf.reduce_mean(tf.gather(entity_embeddings, batch_neg_indices[0]) ** 2),
+                                 tf.reduce_mean(tf.gather(relation_embeddings, batch_neg_indices[1]) ** 2),
+                                 tf.reduce_mean(tf.gather(entity_embeddings, batch_neg_indices[2])) ** 2])
             l2_loss *= l2_coe
             loss += l2_loss
 
@@ -92,9 +93,10 @@ for epoch in range(1, 10001):
     if epoch % 20 == 0:
 
         for target_entity_type in ["head", "tail"]:
-
+            import time
+            s = time.time()
             ranks = compute_ranks(test_kg, forward, target_entity_type, test_batch_size, filter_dict)
-
+            print(time.time()-s)
             print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
             res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
             print(res_scores)

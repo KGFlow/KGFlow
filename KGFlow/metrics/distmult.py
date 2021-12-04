@@ -1,7 +1,6 @@
 import tensorflow as tf
 
 
-@tf.function
 def distmult(h, r, t, norm_ord=2, epsilon=1e-9):
 
     if norm_ord:

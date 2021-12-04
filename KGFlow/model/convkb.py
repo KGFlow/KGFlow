@@ -1,16 +1,53 @@
 import tensorflow as tf
-from KGFlow.metrics.convkb import ConvKBLayer
 from KGFlow.metrics.ranking import compute_ranks_by_scores
+from tensorflow.keras.layers import Conv1D, Dropout, BatchNormalization, Dense
 
 
 class ConvKB(tf.keras.Model):
+    def __init__(self, num_filters, kernel_size=1, activation=tf.nn.relu, drop_rate=0.0, use_bn=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conv1d = Conv1D(num_filters, kernel_size)
+        self.activation = activation if activation else lambda x: x
+        self.drop_out = Dropout(drop_rate)
+        self.use_bn = use_bn
+        if self.use_bn:
+            self.bn1 = BatchNormalization()
+            self.bn2 = BatchNormalization()
+        self.kernel = Dense(1, use_bias=False)
+
+    def call(self, inputs, training=None, mask=None):
+        """
+
+        :param inputs: [batch_embedded_h, batch_embedded_r, batch_embedded_t]
+        :param training:
+        :param mask:
+        :return: a score Tensor which shape is (batch_size, 1)
+        """
+        # h, r, t = inputs[0], inputs[1], inputs[2]
+
+        f = tf.stack(inputs, axis=-1)  # (batch * dim * 3)
+        if self.use_bn:
+            f = self.bn1(f, training=training)
+        f = self.conv1d(f)
+        if self.use_bn:
+            f = self.bn2(f, training=training)
+        f = self.activation(f)
+        f = tf.reshape(f, [tf.shape(f)[0], -1])
+        f = self.drop_out(f, training=training)
+
+        scores = self.kernel(f)
+
+        return -scores
+
+
+class ConvKBE(tf.keras.Model):
     def __init__(self, entity_embeddings, relation_embeddings, num_filters=64, kernel_size=1, activation=tf.nn.relu,
                  drop_rate=0.0, use_bn=False):
         super().__init__()
         self.entity_embeddings = entity_embeddings
         self.relation_embeddings = relation_embeddings
 
-        self.convkb = ConvKBLayer(num_filters, kernel_size, activation, drop_rate, use_bn)
+        self.convkb = ConvKB(num_filters, kernel_size, activation, drop_rate, use_bn)
 
     def call(self, inputs, training=None, mask=None):
         h_index, r_index, t_index = inputs[0], inputs[1], inputs[2]
@@ -23,7 +60,8 @@ class ConvKB(tf.keras.Model):
 
         return scores
 
-    def compute_loss(self, scores, labels, activation=tf.nn.softplus):
+    @classmethod
+    def compute_loss(cls, scores, labels, activation=tf.nn.softplus):
         loss = convkb_loss(scores, labels, activation)
         return loss
 

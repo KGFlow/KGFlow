@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
-from KGFlow.metrics.ranking import compute_ranks_by_scores
+from KGFlow.utils.rank_utils import compute_ranks_by_scores
 
 
 class TransE(tf.keras.Model):
@@ -81,10 +81,12 @@ def transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embedding
 
     translated = transe_model([batch_source, batch_r], target_entity_type=target_entity_type, training=False)
 
-    tiled_entity_embeddings = tf.tile(tf.expand_dims(entity_embeddings, axis=0),
-                                      [batch_h.shape[0], 1, 1])
-    tiled_translated = tf.tile(tf.expand_dims(translated, axis=1),
-                               [1, entity_embeddings.shape[0], 1])
+    # tiled_entity_embeddings = tf.tile(tf.expand_dims(entity_embeddings, axis=0),
+    #                                   [batch_h.shape[0], 1, 1])
+    # tiled_translated = tf.tile(tf.expand_dims(translated, axis=1),
+    #                            [1, entity_embeddings.shape[0], 1])
+    tiled_entity_embeddings = tf.expand_dims(entity_embeddings, axis=0)
+    tiled_translated = tf.expand_dims(translated, axis=1)
     scores = compute_distance(tiled_translated, tiled_entity_embeddings, distance_norm)
 
     if filter_list:
@@ -104,7 +106,9 @@ def transe_ranks(h, r, t, transe_model, entity_embeddings, target_entity_type, b
     for test_step, (batch_h, batch_r, batch_t) in enumerate(
             tf.data.Dataset.from_tensor_slices((h, r, t)).batch(batch_size)):
         target_ranks = transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings,
-                                          target_entity_type, distance_norm, filter_list)
+                                          target_entity_type, distance_norm,
+                                          filter_list[test_step * batch_size: (test_step + 1) * batch_size]
+                                          if filter_list else None)
         ranks.append(target_ranks)
 
     ranks = tf.concat(ranks, axis=0)

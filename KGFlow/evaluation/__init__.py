@@ -1,1 +1,1 @@
-from KGFlow.evaluation.ranking import evaluate_rank_scores
+from KGFlow.evaluation.ranking import *

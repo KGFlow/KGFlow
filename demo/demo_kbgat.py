@@ -9,7 +9,7 @@ import KGFlow as kgf
 from KGFlow.model.gat import KBGAT
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling
-from KGFlow.metrics.ranking import compute_ranks_by_scores
+from KGFlow.evaluation.ranking import compute_ranks_by_scores
 from KGFlow.evaluation import evaluate_rank_scores
 
 # data_dict = WN18Dataset().load_data()
