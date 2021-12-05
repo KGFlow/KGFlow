@@ -7,11 +7,10 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
-from KGFlow.model.convkb import ConvKBEmb
+from KGFlow.model.convkb import ConvKBEmb, convkb_loss, convkb_ranks
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
-from KGFlow.utils.sampling_utils import EntityNegativeSampler
-from KGFlow.utils.rank_utils import get_filter_dict
-from KGFlow.evaluation import evaluate_rank_scores, compute_ranks
+from KGFlow.utils import EntityNegativeSampler, get_filter_dict
+from KGFlow.evaluation import evaluate_rank_scores
 
 # data_dict = WN18Dataset().load_data()
 data_dict = FB15k237Dataset().load_data()
@@ -53,16 +52,8 @@ def forward(batch_indices, training=False):
     return model(batch_indices, training=training)
 
 
-@tf.function
-def compute_loss(pos_scores, neg_scores):
-    # loss = model.compute_loss(tf.concat([pos_scores, neg_scores], axis=0),
-    #                           tf.concat([tf.ones_like(pos_scores), -tf.ones_like(neg_scores)], axis=0),
-    #                           activation=tf.nn.softplus)
-    pos_loss = model.compute_loss(pos_scores, tf.ones_like(pos_scores))
-    neg_loss = model.compute_loss(neg_scores,  -tf.ones_like(neg_scores))
-    loss = pos_loss + neg_loss
-    return loss
-
+compute_loss = tf.function(convkb_loss)
+compute_ranks = convkb_ranks
 
 for epoch in range(1, 10001):
     for step, (batch_h, batch_r, batch_t) in enumerate(

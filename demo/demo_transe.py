@@ -10,9 +10,8 @@ import KGFlow as kgf
 from KGFlow.model.transe import TransE, compute_distance, transe_ranks
 from KGFlow.dataset.wn18 import WN18Dataset
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
-from KGFlow.utils.sampling_utils import entity_negative_sampling
 from KGFlow.evaluation import evaluate_rank_scores
-from KGFlow.utils.rank_utils import get_filter_dict
+from KGFlow.utils import entity_negative_sampling, get_filter_dict
 
 # data_dict = WN18Dataset().load_data()
 data_dict = FB15k237Dataset().load_data()
@@ -89,7 +88,7 @@ for epoch in range(1, 10001):
         normed_entity_embeddings = tf.nn.l2_normalize(model.entity_embeddings, axis=-1)
 
         for target_entity_type in ["head", "tail"]:
-            ranks = compute_ranks(test_kg.h, test_kg.r, test_kg.t, forward, normed_entity_embeddings,
+            ranks = compute_ranks(test_kg, forward, normed_entity_embeddings,
                                   target_entity_type, test_batch_size, distance_norm=distance_norm,
                                   filter_list=filter_dict.get(target_entity_type))
             print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))

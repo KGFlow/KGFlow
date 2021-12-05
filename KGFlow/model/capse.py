@@ -1,9 +1,13 @@
 import numpy as np
 import tensorflow as tf
-
+from KGFlow.loss.losses import softplus_loss
+from KGFlow.evaluation import compute_ranks
 
 # 复制的，不要看 !!!!!!!!!!!!!!!!!!!!!!!
-
+# 复制的，不要看 !!!!!!!!!!!!!!!!!!!!!!!
+# 复制的，不要看 !!!!!!!!!!!!!!!!!!!!!!!
+# 复制的，不要看 !!!!!!!!!!!!!!!!!!!!!!!
+# 复制的，不要看 !!!!!!!!!!!!!!!!!!!!!!!
 
 epsilon = 1e-9
 
@@ -21,6 +25,7 @@ class CapsLayer(tf.keras.Model):
     Returns:
         A 4-D tensor.
     '''
+
     def __init__(self, num_outputs_secondCaps, vec_len_secondCaps, batch_size, iter_routing,
                  embedding_size, with_routing=True, layer_type='FC', sequence_length=3, useConstantInit=False,
                  filter_size=1, num_filters=50):
@@ -38,7 +43,8 @@ class CapsLayer(tf.keras.Model):
         self.num_filters = num_filters
 
         self.W = tf.Variable(tf.random.truncated_normal(shape=(1, self.embedding_size, self.num_outputs_secondCaps,
-                                                               self.num_filters, self.vec_len_secondCaps), stddev=0.01, seed=1234),
+                                                               self.num_filters, self.vec_len_secondCaps), stddev=0.01,
+                                                        seed=1234),
                              dtype=tf.float32, name="Weight")
 
         if self.useConstantInit == False:
@@ -51,7 +57,6 @@ class CapsLayer(tf.keras.Model):
 
         self.b = tf.Variable(tf.constant(0.0, shape=[self.num_filters]), name="b")
 
-
     def call(self, input, training=None, mask=None):
         '''
         The parameters 'kernel_size' and 'stride' will be used while 'layer_type' equal 'CONV'
@@ -60,7 +65,6 @@ class CapsLayer(tf.keras.Model):
         if self.layer_type == 'CONV':
 
             if not self.with_routing:
-
                 conv = tf.nn.conv2d(
                     input,
                     self.conv_W,
@@ -74,7 +78,7 @@ class CapsLayer(tf.keras.Model):
                 capsules = tf.expand_dims(conv1, -1)
                 capsules = squash(capsules)
 
-                return capsules #[batch_size, k, num_filters, 1]
+                return capsules  # [batch_size, k, num_filters, 1]
 
         if self.layer_type == 'FC':
             if self.with_routing:
@@ -83,16 +87,16 @@ class CapsLayer(tf.keras.Model):
                                                  1, input.shape[-2], 1))
 
                 # with tf.variable_scope('routing'):
-                    # b_IJ: [batch_size, num_caps_l, num_caps_l_plus_1, 1, 1],
-                    # about the reason of using 'batch_size', see issue #21
-                b_IJ = tf.constant(np.zeros([batch_size, input.shape[1], self.num_outputs_secondCaps, 1, 1], dtype=np.float32))
+                # b_IJ: [batch_size, num_caps_l, num_caps_l_plus_1, 1, 1],
+                # about the reason of using 'batch_size', see issue #21
+                b_IJ = tf.constant(
+                    np.zeros([batch_size, input.shape[1], self.num_outputs_secondCaps, 1, 1], dtype=np.float32))
                 capsules = self.routing(input, b_IJ, batch_size=batch_size, iter_routing=self.iter_routing,
-                                   num_caps_i=self.embedding_size, num_caps_j=self.num_outputs_secondCaps,
-                                   len_u_i=self.num_filters, len_v_j=self.vec_len_secondCaps)
+                                        num_caps_i=self.embedding_size, num_caps_j=self.num_outputs_secondCaps,
+                                        len_u_i=self.num_filters, len_v_j=self.vec_len_secondCaps)
                 capsules = tf.squeeze(capsules, axis=1)
 
                 return capsules
-
 
     def routing(self, input, b_IJ, batch_size, iter_routing, num_caps_i, num_caps_j, len_u_i, len_v_j):
 
@@ -124,7 +128,7 @@ class CapsLayer(tf.keras.Model):
         # line 3,for r iterations do
         for r_iter in range(iter_routing):
             # with tf.variable_scope('iter_' + str(r_iter)):
-                # line 4:
+            # line 4:
             c_IJ = tf.nn.softmax(b_IJ, axis=1) * num_caps_i
             if r_iter == iter_routing - 1:
                 # line 5:
@@ -159,12 +163,13 @@ def squash(vector):
     vec_squared_norm = tf.reduce_sum(tf.square(vector), -2, keepdims=True)
     scalar_factor = vec_squared_norm / (1 + vec_squared_norm) / tf.sqrt(vec_squared_norm + epsilon)
     vec_squashed = scalar_factor * vector  # element-wise
-    return(vec_squashed)
+    return (vec_squashed)
 
 
 class CapsE(tf.keras.Model):
     def __init__(self, E_e, E_r, sequence_length, embedding_size, num_filters, vocab_size, iter_routing, batch_size=256,
-                 num_outputs_secondCaps=1, vec_len_secondCaps=10, initialization=[], filter_size=1, useConstantInit=False):
+                 num_outputs_secondCaps=1, vec_len_secondCaps=10, initialization=[], filter_size=1,
+                 useConstantInit=False):
         super(CapsE, self).__init__()
         # Placeholders for input, output
         # self.input_x = tf.placeholder(tf.int32, [batch_size, sequence_length], name="input_x")
@@ -182,17 +187,19 @@ class CapsE(tf.keras.Model):
         self.E_e = E_e
         self.E_r = E_r
 
-
-        self.firstCaps = CapsLayer(num_outputs_secondCaps=self.num_outputs_secondCaps, vec_len_secondCaps=self.vec_len_secondCaps,
-                                with_routing=False, layer_type='CONV', embedding_size=self.embedding_size,
-                                batch_size=self.batch_size, iter_routing=self.iter_routing,
-                                useConstantInit=self.useConstantInit, filter_size=self.filter_size,
-                                num_filters=self.num_filters, sequence_length=self.sequence_length)
-        self.secondCaps = CapsLayer(num_outputs_secondCaps=self.num_outputs_secondCaps, vec_len_secondCaps=self.vec_len_secondCaps,
-                                with_routing=True, layer_type='FC',
-                                batch_size=self.batch_size, iter_routing=self.iter_routing,
-                                embedding_size=self.embedding_size, useConstantInit=self.useConstantInit, filter_size=self.filter_size,
-                                num_filters=self.num_filters, sequence_length=self.sequence_length)
+        self.firstCaps = CapsLayer(num_outputs_secondCaps=self.num_outputs_secondCaps,
+                                   vec_len_secondCaps=self.vec_len_secondCaps,
+                                   with_routing=False, layer_type='CONV', embedding_size=self.embedding_size,
+                                   batch_size=self.batch_size, iter_routing=self.iter_routing,
+                                   useConstantInit=self.useConstantInit, filter_size=self.filter_size,
+                                   num_filters=self.num_filters, sequence_length=self.sequence_length)
+        self.secondCaps = CapsLayer(num_outputs_secondCaps=self.num_outputs_secondCaps,
+                                    vec_len_secondCaps=self.vec_len_secondCaps,
+                                    with_routing=True, layer_type='FC',
+                                    batch_size=self.batch_size, iter_routing=self.iter_routing,
+                                    embedding_size=self.embedding_size, useConstantInit=self.useConstantInit,
+                                    filter_size=self.filter_size,
+                                    num_filters=self.num_filters, sequence_length=self.sequence_length)
 
         # Embedding layer
         # with tf.name_scope("embedding"):
@@ -211,8 +218,9 @@ class CapsE(tf.keras.Model):
         # self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=500)
         #
         # tf.logging.info('Seting up the main structure')
+
     def call(self, inputs, training=None, mask=None):
-        #The first capsule layer
+        # The first capsule layer
         # with tf.variable_scope('FirstCaps_layer'):
         h_index, r_index, t_index = inputs[0], inputs[1], inputs[2]
         h = tf.nn.embedding_lookup(self.E_e, h_index)
@@ -221,9 +229,8 @@ class CapsE(tf.keras.Model):
         embedded_chars = tf.stack([h, r, t], axis=1)
         X = tf.expand_dims(embedded_chars, -1)
 
-
         caps1 = self.firstCaps(X)
-        #The second capsule layer
+        # The second capsule layer
         # with tf.variable_scope('SecondCaps_layer'):
         caps2 = self.secondCaps(caps1)
 
@@ -232,7 +239,10 @@ class CapsE(tf.keras.Model):
 
         return scores
 
-    def compute_loss(self, scores, labels):
-        losses = tf.square(tf.nn.softplus(scores * labels))
-        total_loss = tf.reduce_mean(losses)
-        return total_loss
+    def compute_loss(self, pos_scores, neg_scores):
+        loss = softplus_loss(pos_scores, neg_scores)
+        return loss
+
+
+capse_loss = softplus_loss
+capse_ranks = compute_ranks

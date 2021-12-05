@@ -25,5 +25,5 @@ from KGFlow.model.capse import *
 #         return scores
 #
 #     @classmethod
-#     def compute_loss(cls, scores, labels):
+#     def compute_loss(cls, pos_scores, neg_scores):
 #         pass

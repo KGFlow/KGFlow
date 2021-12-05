@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras.layers import Dense, Conv2D, Dropout, BatchNormalization, SpatialDropout2D
+from KGFlow.loss.losses import sigmoid_loss
+from KGFlow.evaluation import compute_ranks
 
 
 class ConvE(tf.keras.Model):
@@ -80,16 +82,10 @@ class ConvEEmb(tf.keras.Model):
 
         return scores
 
-    @classmethod
-    def compute_loss(cls, scores, labels):
-        loss = conve_loss(scores, labels)
+    def compute_loss(self, pos_scores, neg_scores):
+        loss = conve_loss(pos_scores, neg_scores)
         return loss
 
 
-def conve_loss(scores, labels):
-    losses = tf.nn.sigmoid_cross_entropy_with_logits(
-        logits=scores,
-        labels=labels
-    )
-    loss = tf.reduce_mean(losses)
-    return loss
+conve_loss = sigmoid_loss
+conve_ranks = compute_ranks

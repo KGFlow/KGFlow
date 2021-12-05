@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-from KGFlow.data.kg import KG
 
 
 def hits_score(ranks, k_list):

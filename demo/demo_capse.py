@@ -6,10 +6,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow import keras
 import KGFlow as kgf
-from KGFlow.model.capse import CapsE
+from KGFlow.model.capse import CapsE, capse_loss, capse_ranks
 from KGFlow.dataset.fb15k import FB15k237Dataset
-from KGFlow.utils.sampling_utils import EntityNegativeSampler
-from KGFlow.utils.rank_utils import get_filter_dict, compute_ranks
+from KGFlow.utils import EntityNegativeSampler, get_filter_dict
 from KGFlow.evaluation import evaluate_rank_scores
 
 # data_dict = WN18Dataset().load_data()
@@ -67,14 +66,8 @@ def forward(batch_indices, training=False):
     return model(batch_indices, training=training)
 
 
-# @tf.function
-def compute_loss(pos_scores, neg_scores):
-
-    pos_loss = model.compute_loss(pos_scores, tf.ones_like(pos_scores))
-    neg_loss = model.compute_loss(neg_scores, -tf.ones_like(neg_scores))
-
-    loss = pos_loss + neg_loss
-    return loss
+compute_loss = tf.function(capse_loss)
+compute_ranks = capse_ranks
 
 
 for epoch in range(0, 10001):

@@ -1,5 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Conv1D, Dropout, BatchNormalization, Dense
+from KGFlow.loss.losses import softplus_loss
+from KGFlow.evaluation import compute_ranks
 
 
 class ConvKB(tf.keras.Model):
@@ -59,25 +61,13 @@ class ConvKBEmb(tf.keras.Model):
 
         return scores
 
-    @classmethod
-    def compute_loss(cls, scores, labels, activation=tf.nn.softplus):
-        loss = convkb_loss(scores, labels, activation)
+    def compute_loss(self, pos_scores, neg_scores):
+        loss = convkb_loss(pos_scores, neg_scores)
         return loss
 
 
-def convkb_loss(scores, labels, activation=tf.nn.softplus):
-    """
-    loss for ConvKB
-    :param scores:
-    :param labels: pos sample: +1, neg_sample: -1
-    :param activation:
-    :return: loss, shape: []
-    """
-    scores = tf.reshape(scores, [-1])
-    labels = tf.reshape(tf.cast(labels, dtype=tf.float32), [-1])
-    losses = activation(scores * labels)
-    return tf.reduce_mean(losses)
-
+convkb_loss = softplus_loss
+convkb_ranks = compute_ranks
 
 # def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_entity_type):
 #     _batch_size = tf.shape(batch_h)[0]

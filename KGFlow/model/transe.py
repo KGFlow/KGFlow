@@ -2,7 +2,8 @@
 
 import tensorflow as tf
 import numpy as np
-from KGFlow.utils.rank_utils import compute_ranks_by_scores
+from KGFlow.evaluation import compute_ranks_by_scores
+from KGFlow.loss.losses import margin_loss
 
 
 class TransE(tf.keras.Model):
@@ -49,18 +50,15 @@ class TransE(tf.keras.Model):
 
         return translated
 
-    def compute_loss(self, pos_logits, neg_logits, margin=0.0, l2_coe=0.0):
-        loss = transe_loss(pos_logits, neg_logits, margin)
+    def compute_loss(self, pos_scores, neg_scores, margin=0.0, l2_coe=0.0):
+        loss = transe_loss(pos_scores, neg_scores, margin)
         if l2_coe > 0.0:
             loss += tf.add_n([tf.nn.l2_loss(var) for var in self.trainable_variables if
                               "kernel" in var.name or "embedding" in var.name] + [0.0]) * l2_coe
         return loss
 
 
-def transe_loss(pos_logits, neg_logits, margin=0.0):
-    losses = tf.maximum(margin + pos_logits - neg_logits, 0.0)
-    loss = tf.reduce_mean(losses)
-    return loss
+transe_loss = margin_loss
 
 
 def compute_distance(a, b, norm=1):
@@ -100,11 +98,11 @@ def transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embedding
     return compute_ranks_by_scores(scores, batch_target)
 
 
-def transe_ranks(h, r, t, transe_model, entity_embeddings, target_entity_type, batch_size=200, distance_norm=1,
+def transe_ranks(test_kg, transe_model, entity_embeddings, target_entity_type, batch_size=200, distance_norm=1,
                  filter_list=None):
     ranks = []
     for test_step, (batch_h, batch_r, batch_t) in enumerate(
-            tf.data.Dataset.from_tensor_slices((h, r, t)).batch(batch_size)):
+            tf.data.Dataset.from_tensor_slices((test_kg.h, test_kg.r, test_kg.t)).batch(batch_size)):
         target_ranks = transe_batch_ranks(batch_h, batch_r, batch_t, transe_model, entity_embeddings,
                                           target_entity_type, distance_norm,
                                           filter_list[test_step * batch_size: (test_step + 1) * batch_size]
