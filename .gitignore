@@ -132,5 +132,3 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-/demo/demo_capse.py
-/KGFlow/model/capse.py

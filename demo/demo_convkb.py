@@ -7,11 +7,11 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import KGFlow as kgf
-from KGFlow.model.convkb import ConvKBE, convkb_ranks
+from KGFlow.model.convkb import ConvKBEmb
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
-from KGFlow.utils.sampling_utils import entity_negative_sampling, EntityNegativeSampler
-from KGFlow.utils.rank_utils import get_filter_dict, compute_ranks
-from KGFlow.evaluation import evaluate_rank_scores
+from KGFlow.utils.sampling_utils import EntityNegativeSampler
+from KGFlow.utils.rank_utils import get_filter_dict
+from KGFlow.evaluation import evaluate_rank_scores, compute_ranks
 
 # data_dict = WN18Dataset().load_data()
 data_dict = FB15k237Dataset().load_data()
@@ -44,7 +44,7 @@ else:
     E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size)
     entity_embeddings, relation_embeddings = E()
 
-model = ConvKBE(entity_embeddings, relation_embeddings, num_filters, drop_rate=drop_rate, use_bn=False)
+model = ConvKBEmb(entity_embeddings, relation_embeddings, num_filters, drop_rate=drop_rate, use_bn=False)
 sampler = EntityNegativeSampler(train_kg)
 
 
@@ -55,9 +55,12 @@ def forward(batch_indices, training=False):
 
 @tf.function
 def compute_loss(pos_scores, neg_scores):
-    loss = model.compute_loss(tf.concat([pos_scores, neg_scores], axis=0),
-                              tf.concat([tf.ones_like(pos_scores), -tf.ones_like(neg_scores)], axis=0),
-                              activation=tf.nn.softplus)
+    # loss = model.compute_loss(tf.concat([pos_scores, neg_scores], axis=0),
+    #                           tf.concat([tf.ones_like(pos_scores), -tf.ones_like(neg_scores)], axis=0),
+    #                           activation=tf.nn.softplus)
+    pos_loss = model.compute_loss(pos_scores, tf.ones_like(pos_scores))
+    neg_loss = model.compute_loss(neg_scores,  -tf.ones_like(neg_scores))
+    loss = pos_loss + neg_loss
     return loss
 
 
@@ -93,10 +96,9 @@ for epoch in range(1, 10001):
     if epoch % 20 == 0:
 
         for target_entity_type in ["head", "tail"]:
-            import time
-            s = time.time()
+
             ranks = compute_ranks(test_kg, forward, target_entity_type, test_batch_size, filter_dict)
-            print(time.time()-s)
+
             print("epoch = {}\ttarget_entity_type = {}".format(epoch, target_entity_type))
             res_scores = evaluate_rank_scores(ranks, ["mr", "mrr", "hits"], [1, 3, 10, 100, 1000])
             print(res_scores)

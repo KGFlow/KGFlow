@@ -1,5 +1,4 @@
 import tensorflow as tf
-from KGFlow.metrics.ranking import compute_ranks_by_scores
 from tensorflow.keras.layers import Conv1D, Dropout, BatchNormalization, Dense
 
 
@@ -40,10 +39,10 @@ class ConvKB(tf.keras.Model):
         return -scores
 
 
-class ConvKBE(tf.keras.Model):
+class ConvKBEmb(tf.keras.Model):
     def __init__(self, entity_embeddings, relation_embeddings, num_filters=64, kernel_size=1, activation=tf.nn.relu,
-                 drop_rate=0.0, use_bn=False):
-        super().__init__()
+                 drop_rate=0.0, use_bn=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.entity_embeddings = entity_embeddings
         self.relation_embeddings = relation_embeddings
 
@@ -80,27 +79,27 @@ def convkb_loss(scores, labels, activation=tf.nn.softplus):
     return tf.reduce_mean(losses)
 
 
-def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_entity_type):
-    _batch_size = tf.shape(batch_h)[0]
-    if target_entity_type == "tail":
-        batch_source = batch_h
-        batch_target = batch_t
-    else:
-        batch_source = batch_t
-        batch_target = batch_h
-
-    tiled_s = tf.reshape(tf.tile(tf.expand_dims(batch_source, axis=-1), [1, num_entities]), [-1])
-    tiled_r = tf.reshape(tf.tile(tf.expand_dims(batch_r, axis=-1), [1, num_entities]), [-1])
-    tiled_o = tf.tile(tf.range(num_entities), [_batch_size])
-
-    if target_entity_type == "tail":
-        tiled_indices = [tiled_s, tiled_r, tiled_o]
-    else:
-        tiled_indices = [tiled_o, tiled_r, tiled_s]
-
-    scores = convkb_model(tiled_indices)
-    scores = tf.reshape(scores, [-1])
-    split_size = tf.tile([tf.shape(scores)[0] // _batch_size], [_batch_size])
-    scores = tf.stack(tf.split(scores, split_size))
-
-    return compute_ranks_by_scores(scores, batch_target)
+# def convkb_ranks(batch_h, batch_r, batch_t, num_entities, convkb_model, target_entity_type):
+#     _batch_size = tf.shape(batch_h)[0]
+#     if target_entity_type == "tail":
+#         batch_source = batch_h
+#         batch_target = batch_t
+#     else:
+#         batch_source = batch_t
+#         batch_target = batch_h
+#
+#     tiled_s = tf.reshape(tf.tile(tf.expand_dims(batch_source, axis=-1), [1, num_entities]), [-1])
+#     tiled_r = tf.reshape(tf.tile(tf.expand_dims(batch_r, axis=-1), [1, num_entities]), [-1])
+#     tiled_o = tf.tile(tf.range(num_entities), [_batch_size])
+#
+#     if target_entity_type == "tail":
+#         tiled_indices = [tiled_s, tiled_r, tiled_o]
+#     else:
+#         tiled_indices = [tiled_o, tiled_r, tiled_s]
+#
+#     scores = convkb_model(tiled_indices)
+#     scores = tf.reshape(scores, [-1])
+#     split_size = tf.tile([tf.shape(scores)[0] // _batch_size], [_batch_size])
+#     scores = tf.stack(tf.split(scores, split_size))
+#
+#     return compute_ranks_by_scores(scores, batch_target)

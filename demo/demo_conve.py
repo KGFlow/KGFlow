@@ -9,9 +9,9 @@ import numpy as np
 import KGFlow as kgf
 from KGFlow.dataset.fb15k import FB15kDataset, FB15k237Dataset
 from KGFlow.utils.sampling_utils import entity_negative_sampling, EntityNegativeSampler
-from KGFlow.utils.rank_utils import get_filter_dict, compute_ranks
-from KGFlow.model import ConvELayer
-from KGFlow.evaluation import evaluate_rank_scores
+from KGFlow.utils.rank_utils import get_filter_dict
+from KGFlow.model import ConvEEmb
+from KGFlow.evaluation import evaluate_rank_scores, compute_ranks
 
 # data_dict = WN18Dataset().load_data()
 data_dict = FB15k237Dataset().load_data()
@@ -22,19 +22,18 @@ entity_init_embeddings, relation_init_embeddings = (data_dict.get(name, None) fo
 
 init_embedding = False
 filter = True
-train_filtered = False
-num_filters = 200
+num_filters = 16
+filter_size = 3
 num_neg = 10
 train_n_batch = 500
 train_batch_size = train_kg.num_triples // train_n_batch
-test_batch_size = 10
+test_batch_size = 5
 
 learning_rate = 1e-4
-drop_rate = 0.5
-l2_coe = 1e-3
+drop_rate = 0.3
+l2_coe = 1e-5
 
 filter_dict = get_filter_dict(test_kg, [train_kg, valid_kg]) if filter else None
-optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
 if init_embedding:
     entity_embeddings = tf.Variable(entity_init_embeddings, name="entity_embeddings")
@@ -43,37 +42,25 @@ else:
     embedding_size = 200
     E = kgf.RandomInitEmbeddings(train_kg.num_entities, train_kg.num_relations, embedding_size)
     entity_embeddings, relation_embeddings = E()
-    E_rr = tf.Variable(tf.keras.initializers.truncated_normal(stddev=np.sqrt(1 / embedding_size))(
-        [train_kg.num_relations, embedding_size]))
 
-
-model = ConvELayer(num_filters, drop_rate=drop_rate)
+model = ConvEEmb(entity_embeddings, relation_embeddings, num_filters, filter_size, drop_rate=drop_rate)
 sampler = EntityNegativeSampler(train_kg)
 
+optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
-# @tf.function
+
+@tf.function
 def forward(batch_indices, training=False):
-    h_index, r_index, t_index = batch_indices
-
-    h = tf.nn.embedding_lookup(entity_embeddings, h_index)
-    r = tf.nn.embedding_lookup(relation_embeddings, r_index)
-    rr = tf.nn.embedding_lookup(E_rr, r_index)
-    t = tf.nn.embedding_lookup(entity_embeddings, t_index)
-    return model([h, r, rr, t], training=training)
+    return model(batch_indices, training=training)
 
 
-# @tf.function
+@tf.function
 def compute_loss(pos_scores, neg_scores):
-    pos_losses = tf.nn.sigmoid_cross_entropy_with_logits(
-        logits=pos_scores,
-        labels=tf.zeros_like(pos_scores)
-    )
-    neg_losses = tf.nn.sigmoid_cross_entropy_with_logits(
-        logits=neg_scores,
-        labels=tf.ones_like(neg_scores)
-    )
-
-    loss = tf.reduce_mean(pos_losses) + tf.reduce_mean(neg_losses)
+    # loss = model.compute_loss(tf.concat([pos_scores, neg_scores], axis=0),
+    #                           tf.concat([tf.zeros_like(pos_scores), tf.ones_like(neg_scores)], axis=0))
+    pos_loss = model.compute_loss(pos_scores, tf.zeros_like(pos_scores))
+    neg_loss = model.compute_loss(neg_scores,  tf.ones_like(neg_scores))
+    loss = pos_loss + neg_loss
     return loss
 
 
@@ -83,8 +70,7 @@ for epoch in range(1, 10001):
                     shuffle(300000).batch(train_batch_size)):
 
         with tf.GradientTape() as tape:
-            batch_neg_indices = sampler.indices_sampling(batch_h, batch_r, batch_t, num_neg=num_neg,
-                                                         filtered=train_filtered)
+            batch_neg_indices = sampler.indices_sampling(batch_h, batch_r, batch_t, num_neg=num_neg)
 
             pos_scores = forward([batch_h, batch_r, batch_t], training=True)
             neg_scores = forward(batch_neg_indices, training=True)
@@ -98,7 +84,7 @@ for epoch in range(1, 10001):
 
         vars = tape.watched_variables()
         grads = tape.gradient(loss, vars)
-        # grads, _ = tf.clip_by_global_norm(grads, 0.5)
+        grads, _ = tf.clip_by_global_norm(grads, 0.5)
         optimizer.apply_gradients(zip(grads, vars))
 
         if step % 100 == 0:
