@@ -29,8 +29,8 @@ def compute_ranks_by_model(batch_h, batch_r, batch_t, num_entities, model, targe
         batch_source = batch_t
         batch_target = batch_h
 
-    tiled_s = tf.reshape(tf.tile(tf.expand_dims(batch_source, axis=-1), [1, num_entities]), [-1])
-    tiled_r = tf.reshape(tf.tile(tf.expand_dims(batch_r, axis=-1), [1, num_entities]), [-1])
+    tiled_s = tf.repeat(batch_source, num_entities)
+    tiled_r = tf.repeat(batch_r, num_entities)
     tiled_o = tf.tile(tf.range(num_entities), [_batch_size])
 
     if target_entity_type == "tail":
